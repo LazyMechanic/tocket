@@ -1,25 +1,40 @@
-use crate::error::Error;
+use crate::{Error, RateLimiter};
 
 use std::time::{Duration, Instant};
 
-pub struct RateLimiter {
+pub struct InMemoryTokenBucket {
+    inner: parking_lot::Mutex<InMemoryTokenBucketInner>,
+}
+
+struct InMemoryTokenBucketInner {
     cap: u32,
     available_tokens: u32,
     last_refill: Instant,
     refill_tick: Duration,
 }
 
-impl RateLimiter {
+impl InMemoryTokenBucket {
     pub fn new(rps: u32) -> Self {
         Self {
-            cap: rps,
-            available_tokens: rps,
-            last_refill: Instant::now(),
-            refill_tick: Duration::from_secs(1) / rps,
+            inner: parking_lot::Mutex::new(InMemoryTokenBucketInner {
+                cap: rps,
+                available_tokens: rps,
+                last_refill: Instant::now(),
+                refill_tick: Duration::from_secs(1) / rps,
+            }),
         }
     }
+}
 
-    pub fn try_acquire(&mut self, permits: u32) -> Result<(), Error> {
+impl RateLimiter for InMemoryTokenBucket {
+    fn try_acquire(&self, permits: u32) -> Result<(), Error> {
+        let mut inner = self.inner.lock();
+        inner.try_acquire(permits)
+    }
+}
+
+impl InMemoryTokenBucketInner {
+    fn try_acquire(&mut self, permits: u32) -> Result<(), Error> {
         self.refill();
 
         if self.available_tokens >= permits {
@@ -28,10 +43,6 @@ impl RateLimiter {
         } else {
             Err(Error)
         }
-    }
-
-    pub fn try_acquire_one(&mut self) -> Result<(), Error> {
-        self.try_acquire(1)
     }
 
     fn refill(&mut self) {
@@ -71,7 +82,7 @@ mod tests {
 
     #[test]
     fn try_acquire() {
-        let mut rl = RateLimiter::new(2);
+        let rl = InMemoryTokenBucket::new(2);
 
         assert!(rl.try_acquire(2).is_ok());
         assert!(rl.try_acquire_one().is_err());
