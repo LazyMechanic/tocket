@@ -1,3 +1,8 @@
 #[derive(Debug, thiserror::Error)]
-#[error("rate limit exceeded")]
-pub struct Error;
+pub enum Error {
+    #[error("rate limit exceeded")]
+    RateLimitExceeded,
+
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error>),
+}

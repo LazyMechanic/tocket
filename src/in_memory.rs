@@ -41,7 +41,7 @@ impl InMemoryTokenBucketInner {
             self.available_tokens -= permits;
             Ok(())
         } else {
-            Err(Error)
+            Err(Error::RateLimitExceeded)
         }
     }
 
@@ -72,7 +72,7 @@ impl InMemoryTokenBucketInner {
 
         self.available_tokens =
             u32::min(self.available_tokens + tokens_since_last_refill, self.cap);
-        self.last_refill = self.last_refill + self.refill_tick * tokens_since_last_refill;
+        self.last_refill += self.refill_tick * tokens_since_last_refill;
     }
 }
 
