@@ -30,12 +30,12 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --features=test-redis --verbose
       env:
         REDIS_HOST: redis://127.0.0.1:6379
     - name: Install criterion
       run: cargo install cargo-criterion
     - name: Run benches
-      run: cargo criterion
+      run: cargo criterion --features=test-redis
       env:
         REDIS_HOST: redis://127.0.0.1:6379
