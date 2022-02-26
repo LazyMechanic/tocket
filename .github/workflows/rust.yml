@@ -36,6 +36,6 @@ jobs:
     - name: Install criterion
       run: cargo install cargo-criterion
     - name: Run benches
-      run: cargo test --verbose
+      run: cargo criterion
       env:
         REDIS_HOST: redis://127.0.0.1:6379
