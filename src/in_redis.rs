@@ -2,6 +2,7 @@ use crate::{Error, RateLimiter};
 
 use std::time::{Duration, SystemTime};
 
+/// Rate limiter that implements token bucket algorithm with storage in Redis.
 pub struct RedisTokenBucket {
     conn: parking_lot::Mutex<redis::Connection>,
     cap: u32,
@@ -11,6 +12,9 @@ pub struct RedisTokenBucket {
 }
 
 impl RedisTokenBucket {
+    /// Creates new rate limiter with max rate limit of `rps`.
+    /// `available_tokens_key` and `last_refill_key` are the keys
+    /// in Redis that contain these values
     pub fn new<S1, S2>(
         conn: redis::Connection,
         rps: u32,

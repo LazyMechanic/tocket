@@ -2,6 +2,7 @@ use crate::{Error, RateLimiter};
 
 use std::time::{Duration, Instant};
 
+/// Rate limiter that implements token bucket algorithm with storage in memory.
 pub struct InMemoryTokenBucket {
     inner: parking_lot::Mutex<InMemoryTokenBucketInner>,
 }
@@ -14,6 +15,7 @@ struct InMemoryTokenBucketInner {
 }
 
 impl InMemoryTokenBucket {
+    /// Creates new rate limiter with max rate limit of `rps`.
     pub fn new(rps: u32) -> Self {
         Self {
             inner: parking_lot::Mutex::new(InMemoryTokenBucketInner {
