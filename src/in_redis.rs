@@ -14,24 +14,35 @@ pub struct RedisTokenBucket {
 impl RedisTokenBucket {
     /// Creates new rate limiter with max rate limit of `rps_limit`.
     /// `available_tokens_key` and `last_refill_key` are the keys
-    /// in Redis that contain these values
-    pub fn new<S1, S2>(
-        conn: redis::Connection,
+    /// in Redis that contain these values.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if failed to connect to the Redis.
+    pub fn new<S1, S2, S3>(
+        conn_info: S1,
         rps_limit: u32,
-        available_tokens_key: S1,
-        last_refill_key: S2,
-    ) -> Self
+        available_tokens_key: S2,
+        last_refill_key: S3,
+    ) -> Result<Self, Error>
     where
-        S1: Into<String>,
+        S1: AsRef<str>,
         S2: Into<String>,
+        S3: Into<String>,
     {
-        Self {
+        let client =
+            redis::Client::open(conn_info.as_ref()).map_err(|err| Error::Other(Box::new(err)))?;
+        let conn = client
+            .get_connection()
+            .map_err(|err| Error::Other(Box::new(err)))?;
+
+        Ok(Self {
             conn: parking_lot::Mutex::new(conn),
             cap: rps_limit,
             refill_tick: Duration::from_secs(1) / rps_limit,
             available_tokens_key: available_tokens_key.into(),
             last_refill_key: last_refill_key.into(),
-        }
+        })
     }
 }
 
@@ -126,16 +137,13 @@ mod tests {
 
     #[test]
     fn try_acquire() {
-        let host =
-            std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned());
-        let client = redis::Client::open(host).unwrap();
-
         let rl = RedisTokenBucket::new(
-            client.get_connection().unwrap(),
+            std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned()),
             2,
             "available_tokens",
             "last_refill",
-        );
+        )
+        .unwrap();
 
         assert!(rl.try_acquire(2).is_ok());
         assert!(rl.try_acquire_one().is_err());

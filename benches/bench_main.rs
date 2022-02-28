@@ -79,15 +79,13 @@ fn make_redis_token_bucket(rps: u32) -> RedisTokenBucket {
     let available_tokens_key = format!("{}:available_tokens", namespace);
     let last_refill_key = format!("{}:last_refill", namespace);
 
-    let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned());
-    let client = redis::Client::open(host).unwrap();
-
     RedisTokenBucket::new(
-        client.get_connection().unwrap(),
+        std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned()),
         rps,
         available_tokens_key.clone(),
         last_refill_key.clone(),
     )
+    .unwrap()
 }
 
 struct Starter {
