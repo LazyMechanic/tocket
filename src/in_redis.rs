@@ -12,12 +12,12 @@ pub struct RedisTokenBucket {
 }
 
 impl RedisTokenBucket {
-    /// Creates new rate limiter with max rate limit of `rps`.
+    /// Creates new rate limiter with max rate limit of `rps_limit`.
     /// `available_tokens_key` and `last_refill_key` are the keys
     /// in Redis that contain these values
     pub fn new<S1, S2>(
         conn: redis::Connection,
-        rps: u32,
+        rps_limit: u32,
         available_tokens_key: S1,
         last_refill_key: S2,
     ) -> Self
@@ -27,8 +27,8 @@ impl RedisTokenBucket {
     {
         Self {
             conn: parking_lot::Mutex::new(conn),
-            cap: rps,
-            refill_tick: Duration::from_secs(1) / rps,
+            cap: rps_limit,
+            refill_tick: Duration::from_secs(1) / rps_limit,
             available_tokens_key: available_tokens_key.into(),
             last_refill_key: last_refill_key.into(),
         }
@@ -88,9 +88,20 @@ fn refill(state: &mut RedisTokenBucketState) {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_nanos() as u64;
+        .as_nanos()
+        // Converts u128 to u64.
+        // SAFETY: Safe until 2554-07-21T23:34:33.709551615+00:00
+        .try_into()
+        .unwrap_or(u64::MAX);
 
-    let refill_tick_ns = state.refill_tick.as_nanos() as u64;
+    let refill_tick_ns = state
+        .refill_tick
+        .as_nanos()
+        // Converts u128 to u64.
+        // SAFETY: Max refill tick is 1_000_000_000 as nanos that equals 1 req/sec
+        .try_into()
+        .unwrap_or(u64::MAX);
+
     let since_last_refill_ns = now - state.last_refill_ts;
 
     if since_last_refill_ns <= refill_tick_ns {
@@ -100,7 +111,9 @@ fn refill(state: &mut RedisTokenBucketState) {
     let tokens_since_last_refill = since_last_refill_ns / refill_tick_ns;
 
     state.available_tokens = u32::min(
-        state.available_tokens + tokens_since_last_refill as u32,
+        state.available_tokens
+            + u32::try_from(tokens_since_last_refill)
+                .unwrap_or_else(|_| state.cap - state.available_tokens),
         state.cap,
     );
     state.last_refill_ts += refill_tick_ns * tokens_since_last_refill;

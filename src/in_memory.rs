@@ -15,14 +15,14 @@ struct InMemoryTokenBucketInner {
 }
 
 impl InMemoryTokenBucket {
-    /// Creates new rate limiter with max rate limit of `rps`.
-    pub fn new(rps: u32) -> Self {
+    /// Creates new rate limiter with max rate limit of `rps_limit`.
+    pub fn new(rps_limit: u32) -> Self {
         Self {
             inner: parking_lot::Mutex::new(InMemoryTokenBucketInner {
-                cap: rps,
-                available_tokens: rps,
+                cap: rps_limit,
+                available_tokens: rps_limit,
                 last_refill: Instant::now(),
-                refill_tick: Duration::from_secs(1) / rps,
+                refill_tick: Duration::from_secs(1) / rps_limit,
             }),
         }
     }

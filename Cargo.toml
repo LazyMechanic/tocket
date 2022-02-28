@@ -3,6 +3,13 @@ name = "tocket"
 version = "0.1.0"
 authors = ["LazyMechanic <asharnrus@gmail.com>"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A trait and simple implemetation of 'Tocken Bucket' algorithm"
+repository = "https://github.com/LazyMechanic/tocket"
+documentation = "https://docs.rs/tocket"
+readme = "README.md"
+categories = ["algorithms", "web-programming"]
+keywords = ["token", "bucket", "rate", "limit"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
