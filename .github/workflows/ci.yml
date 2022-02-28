@@ -32,12 +32,12 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Build
-      run: cargo check --features=test-redis
+      run: cargo check --features=dev-redis-impl,redis-impl
 
     - name: Test
-      run: cargo test --features=test-redis
+      run: cargo test --features=dev-redis-impl,redis-impl
       env:
         REDIS_HOST: redis://localhost:6379
 
     - name: Clippy
-      run: cargo clippy --tests --features=test-redis -- -Dwarnings
+      run: cargo clippy --tests --features=dev-redis-impl,redis-impl -- -Dwarnings

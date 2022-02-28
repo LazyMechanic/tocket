@@ -23,8 +23,11 @@ criterion = "0.3.5"
 crossbeam = "0.8.1"
 
 [features]
-default = []
-test-redis = []
+default = ["redis-impl"]
+redis-impl = []
+
+# Inner feature for testing
+dev-redis-impl = []
 
 [[bench]]
 name = "bench_main"

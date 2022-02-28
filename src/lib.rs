@@ -45,10 +45,12 @@
 
 pub mod error;
 pub mod in_memory;
+#[cfg(feature = "redis-impl")]
 pub mod in_redis;
 
 pub use error::Error;
 pub use in_memory::InMemoryTokenBucket;
+#[cfg(feature = "redis-impl")]
 pub use in_redis::RedisTokenBucket;
 
 /// Trait that provides functionality for acquiring tokens from token bucket.

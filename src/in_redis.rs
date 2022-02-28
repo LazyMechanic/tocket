@@ -130,7 +130,7 @@ fn refill(state: &mut RedisTokenBucketState) {
     state.last_refill_ts += refill_tick_ns * tokens_since_last_refill;
 }
 
-#[cfg(all(test, feature = "test-redis"))]
+#[cfg(all(test, feature = "dev-redis-impl"))]
 mod tests {
     use super::*;
     use std::time::Duration;

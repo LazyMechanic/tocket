@@ -1,11 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Bencher, Criterion};
 use crossbeam::sync::WaitGroup;
-#[cfg(feature = "test-redis")]
+#[cfg(feature = "dev-redis-impl")]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-#[cfg(feature = "test-redis")]
+#[cfg(all(feature = "dev-redis-impl", feature = "redis-impl"))]
 use tocket::in_redis::RedisTokenBucket;
 use tocket::{InMemoryTokenBucket, RateLimiter};
 
@@ -37,7 +37,7 @@ fn bench_in_memory_mt(b: &mut Bencher, rps: u32, target_rps: u32, threads_num: u
     );
 }
 
-#[cfg(feature = "test-redis")]
+#[cfg(feature = "dev-redis-impl")]
 fn bench_redis(b: &mut Bencher, rps: u32, target_rps: u32) {
     b.iter_batched(
         || make_redis_token_bucket(rps),
@@ -50,7 +50,7 @@ fn bench_redis(b: &mut Bencher, rps: u32, target_rps: u32) {
     );
 }
 
-#[cfg(feature = "test-redis")]
+#[cfg(feature = "dev-redis-impl")]
 fn bench_redis_mt(b: &mut Bencher, rps: u32, target_rps: u32, threads_num: u32) {
     b.iter_batched(
         || {
@@ -67,13 +67,13 @@ fn bench_redis_mt(b: &mut Bencher, rps: u32, target_rps: u32, threads_num: u32) 
     );
 }
 
-#[cfg(feature = "test-redis")]
+#[cfg(feature = "dev-redis-impl")]
 fn next_bench_redis_namespace() -> String {
     static CNTR: AtomicUsize = AtomicUsize::new(0);
     format!("{}", CNTR.fetch_add(1, Ordering::Relaxed))
 }
 
-#[cfg(feature = "test-redis")]
+#[cfg(feature = "dev-redis-impl")]
 fn make_redis_token_bucket(rps: u32) -> RedisTokenBucket {
     let namespace = next_bench_redis_namespace();
     let available_tokens_key = format!("{}:available_tokens", namespace);
@@ -147,7 +147,7 @@ fn bench_acquire_one(c: &mut Criterion) {
     let mut g = c.benchmark_group("acquire_one");
 
     g.bench_function("in_memory", |b| bench_in_memory(b, 1000, 1));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis", |b| bench_redis(b, 1000, 1));
 
     g.finish();
@@ -157,7 +157,7 @@ fn bench_within_limit(c: &mut Criterion) {
     let mut g = c.benchmark_group("within_limit_rps_1000_target_500");
 
     g.bench_function("in_memory", |b| bench_in_memory(b, 1000, 500));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis", |b| bench_redis(b, 1000, 500));
 
     g.finish();
@@ -167,7 +167,7 @@ fn bench_on_limit(c: &mut Criterion) {
     let mut g = c.benchmark_group("on_limit_rps_1000_target_1000");
 
     g.bench_function("in_memory", |b| bench_in_memory(b, 1000, 1000));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis", |b| bench_redis(b, 1000, 1000));
 
     g.finish();
@@ -177,7 +177,7 @@ fn bench_over_limit(c: &mut Criterion) {
     let mut g = c.benchmark_group("over_limit_rps_1000_target_1500");
 
     g.bench_function("in_memory", |b| bench_in_memory(b, 1000, 1500));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis", |b| bench_redis(b, 1000, 1500));
 
     g.finish();
@@ -188,27 +188,27 @@ fn bench_within_limit_mt(c: &mut Criterion) {
 
     // 2 threads
     g.bench_function("in_memory_mt_2", |b| bench_in_memory_mt(b, 1000, 500, 2));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_2", |b| bench_redis_mt(b, 1000, 500, 2));
 
     // 4 threads
     g.bench_function("in_memory_mt_4", |b| bench_in_memory_mt(b, 1000, 500, 4));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_4", |b| bench_redis_mt(b, 1000, 500, 4));
 
     // 8 threads
     g.bench_function("in_memory_mt_8", |b| bench_in_memory_mt(b, 1000, 500, 8));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_8", |b| bench_redis_mt(b, 1000, 500, 8));
 
     // 16 threads
     g.bench_function("in_memory_mt_16", |b| bench_in_memory_mt(b, 1000, 500, 16));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_16", |b| bench_redis_mt(b, 1000, 500, 16));
 
     // 32 threads
     g.bench_function("in_memory_mt_32", |b| bench_in_memory_mt(b, 1000, 500, 32));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_32", |b| bench_redis_mt(b, 1000, 500, 32));
 
     g.finish();
@@ -219,27 +219,27 @@ fn bench_on_limit_mt(c: &mut Criterion) {
 
     // 2 threads
     g.bench_function("in_memory_mt_2", |b| bench_in_memory_mt(b, 1000, 1000, 2));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_2", |b| bench_redis_mt(b, 1000, 1000, 2));
 
     // 4 threads
     g.bench_function("in_memory_mt_4", |b| bench_in_memory_mt(b, 1000, 1000, 4));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_onl_mt_4", |b| bench_redis_mt(b, 1000, 1000, 4));
 
     // 8 threads
     g.bench_function("in_memory_mt_8", |b| bench_in_memory_mt(b, 1000, 1000, 8));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_8", |b| bench_redis_mt(b, 1000, 1000, 8));
 
     // 16 threads
     g.bench_function("in_memory_mt_16", |b| bench_in_memory_mt(b, 1000, 1000, 16));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_16", |b| bench_redis_mt(b, 1000, 1000, 16));
 
     // 32 threads
     g.bench_function("in_memory_mt_32", |b| bench_in_memory_mt(b, 1000, 1000, 32));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_32", |b| bench_redis_mt(b, 1000, 1000, 32));
 
     g.finish();
@@ -250,27 +250,27 @@ fn bench_over_limit_mt(c: &mut Criterion) {
 
     // 2 threads
     g.bench_function("in_memory_mt_2", |b| bench_in_memory_mt(b, 1000, 1500, 2));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_2", |b| bench_redis_mt(b, 1000, 1500, 2));
 
     // 4 threads
     g.bench_function("in_memory_mt_4", |b| bench_in_memory_mt(b, 1000, 1500, 4));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_4", |b| bench_redis_mt(b, 1000, 1500, 4));
 
     // 8 threads
     g.bench_function("in_memory_mt_8", |b| bench_in_memory_mt(b, 1000, 1500, 8));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_8", |b| bench_redis_mt(b, 1000, 1500, 8));
 
     // 16 threads
     g.bench_function("in_memory_mt_16", |b| bench_in_memory_mt(b, 1000, 1500, 16));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_16", |b| bench_redis_mt(b, 1000, 1500, 16));
 
     // 32 threads
     g.bench_function("in_memory_mt_32", |b| bench_in_memory_mt(b, 1000, 1500, 32));
-    #[cfg(feature = "test-redis")]
+    #[cfg(feature = "dev-redis-impl")]
     g.bench_function("redis_mt_32", |b| bench_redis_mt(b, 1000, 1500, 32));
 
     g.finish();
