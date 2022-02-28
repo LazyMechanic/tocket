@@ -4,5 +4,5 @@ pub enum Error {
     RateLimitExceeded,
 
     #[error(transparent)]
-    Other(Box<dyn std::error::Error>),
+    Other(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
