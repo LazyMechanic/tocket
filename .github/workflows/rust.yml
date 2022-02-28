@@ -25,6 +25,9 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+        ports:
+          # Maps port 6379 on service container to the host
+          - 6379:6379
     steps:
     - uses: actions/checkout@v2
     - name: Build
@@ -32,10 +35,10 @@ jobs:
     - name: Run tests
       run: cargo test --features=test-redis --verbose
       env:
-        REDIS_HOST: redis://127.0.0.1:6379
+        REDIS_HOST: redis://localhost:6379
     - name: Install criterion
       run: cargo install cargo-criterion
     - name: Run benches
       run: cargo criterion --features=test-redis
       env:
-        REDIS_HOST: redis://127.0.0.1:6379
+        REDIS_HOST: redis://localhost:6379
