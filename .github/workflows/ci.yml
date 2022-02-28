@@ -30,11 +30,14 @@ jobs:
           - 6379:6379
     steps:
     - uses: actions/checkout@v2
+
     - name: Build
-      run: cargo build --verbose
-    - name: Clippy
-      run: cargo clippy
-    - name: Run tests
-      run: cargo test --features=test-redis --verbose
+      run: cargo check --features=test-redis
+
+    - name: Test
+      run: cargo test --features=test-redis
       env:
         REDIS_HOST: redis://localhost:6379
+
+    - name: Clippy
+      run: clippy --tests  --features=test-redis -- -Dwarnings
