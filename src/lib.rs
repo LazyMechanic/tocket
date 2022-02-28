@@ -9,12 +9,12 @@
 //!
 //! # Usage example
 //!
-//! ```
+//! ```no_run
 //! use tocket::{RateLimiter, InMemoryTokenBucket};
 //! use std::sync::Arc;
 //! use std::time::Duration;
 //!
-//! fn main() {
+//! # fn main() {
 //!     let rl = InMemoryTokenBucket::new(100);
 //!     let rl = Arc::new(rl);
 //!     
@@ -40,9 +40,7 @@
 //!         
 //!         handles.push(h);
 //!     }
-//!     
-//!     loop {}
-//! }
+//! # }
 //! ```
 
 pub mod error;
