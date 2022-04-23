@@ -1,100 +1,51 @@
-use crate::{Error, RateLimiter};
+use crate::{RateLimitExceededError, State, Storage, TokenBucketAlgorithm};
 
-use std::time::{Duration, Instant};
-
-/// Rate limiter that implements token bucket algorithm with storage in memory.
-pub struct InMemoryTokenBucket {
-    inner: parking_lot::Mutex<InMemoryTokenBucketInner>,
+pub struct InMemoryStorage {
+    state: parking_lot::Mutex<State>,
 }
 
-struct InMemoryTokenBucketInner {
-    cap: u32,
-    available_tokens: u32,
-    last_refill: Instant,
-    refill_tick: Duration,
-}
-
-impl InMemoryTokenBucket {
-    /// Creates new rate limiter with max rate limit of `rps_limit`.
+impl InMemoryStorage {
     pub fn new(rps_limit: u32) -> Self {
         Self {
-            inner: parking_lot::Mutex::new(InMemoryTokenBucketInner {
+            state: parking_lot::Mutex::new(State {
                 cap: rps_limit,
                 available_tokens: rps_limit,
-                last_refill: Instant::now(),
-                refill_tick: Duration::from_secs(1) / rps_limit,
+                last_refill: time::OffsetDateTime::now_utc(),
+                refill_tick: time::Duration::seconds(1) / rps_limit,
             }),
         }
     }
 }
 
-impl RateLimiter for InMemoryTokenBucket {
-    fn try_acquire(&self, permits: u32) -> Result<(), Error> {
-        let mut inner = self.inner.lock();
-        inner.try_acquire(permits)
-    }
-}
+impl Storage for InMemoryStorage {
+    type Error = RateLimitExceededError;
 
-impl InMemoryTokenBucketInner {
-    fn try_acquire(&mut self, permits: u32) -> Result<(), Error> {
-        self.refill();
-
-        if self.available_tokens >= permits {
-            self.available_tokens -= permits;
-            Ok(())
-        } else {
-            Err(Error::RateLimitExceeded)
-        }
-    }
-
-    fn refill(&mut self) {
-        let now = Instant::now();
-        let since_last_refill = now - self.last_refill;
-
-        if since_last_refill <= self.refill_tick {
-            return;
-        }
-
-        let tokens_since_last_refill = {
-            let mut tokens_count = 0u32;
-            let mut k = since_last_refill;
-            loop {
-                match k.checked_sub(self.refill_tick) {
-                    None => {
-                        break;
-                    }
-                    Some(new_k) => {
-                        k = new_k;
-                        tokens_count += 1;
-                    }
-                }
-            }
-            tokens_count
-        };
-
-        self.available_tokens =
-            u32::min(self.available_tokens + tokens_since_last_refill, self.cap);
-        self.last_refill += self.refill_tick * tokens_since_last_refill;
+    fn try_acquire(&self, alg: TokenBucketAlgorithm, permits: u32) -> Result<(), Self::Error> {
+        let mut state = self.state.lock();
+        alg.try_acquire(&mut state, permits)?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TokenBucket;
+
+    use std::time::Duration;
 
     #[test]
     fn try_acquire() {
-        let rl = InMemoryTokenBucket::new(2);
-
-        assert!(rl.try_acquire(2).is_ok());
-        assert!(rl.try_acquire_one().is_err());
-
-        std::thread::sleep(Duration::from_secs(1));
-        assert!(rl.try_acquire(2).is_ok());
-        assert!(rl.try_acquire_one().is_err());
+        let tb = TokenBucket::new(InMemoryStorage::new(2));
+        assert!(tb.try_acquire(2).is_ok());
+        assert!(tb.try_acquire_one().is_err());
 
         std::thread::sleep(Duration::from_secs(1));
-        assert!(rl.try_acquire(2).is_ok());
-        assert!(rl.try_acquire_one().is_err());
+        assert!(tb.try_acquire(2).is_ok());
+        assert!(tb.try_acquire_one().is_err());
+
+        std::thread::sleep(Duration::from_secs(1));
+        assert!(tb.try_acquire(2).is_ok());
+        assert!(tb.try_acquire_one().is_err());
     }
 }

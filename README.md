@@ -1,23 +1,22 @@
 # Tocket
-The library provides trait and simple implementations (in memory, redis) to limit requests with the "token bucket" algorithm.
+This library provides implementation of token bucket algorithm.
 
 ### Example
 ```rust
-use tocket::{RateLimiter, InMemoryTokenBucket};
+use tocket::{TokenBucket, InMemoryStorage};
 use std::sync::Arc;
 use std::time::Duration;
 
 fn main() {
-    let rl = InMemoryTokenBucket::new(100);
-    let rl = Arc::new(rl);
-    
-    let mut handles = Vec::with_capacity(8);
+    let tb = TokenBucket::new(InMemoryStorage::new(100));
+    let tb = Arc::new(tb);
+
     for _ in 0..8 {
-        let h = std::thread::spawn({
-            let rl = Arc::clone(&rl);
+        std::thread::spawn({
+            let tb = Arc::clone(&tb);
             move || {
                 loop {
-                    match rl.try_acquire_one() {
+                    match tb.try_acquire_one() {
                         Ok(_) => {
                             println!("token acquired, limit not exceeded");
                         }
@@ -25,16 +24,12 @@ fn main() {
                             eprintln!("token acquiring failed: {}", err);
                         }
                     }
-                    
+
                     std::thread::sleep(Duration::from_millis(200));
                 }
             }
         });
-        
-        handles.push(h);
     }
-    
-    loop {}
 }
 ```
 

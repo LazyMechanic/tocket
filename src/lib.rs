@@ -1,30 +1,24 @@
-//! <br>
+//! # Tocket
 //!
-//! This library provides [`tocket::RateLimiter`][RateLimiter] trait, that provides
-//! methods for implementing token bucket rate limiter and
-//! [`tocket::InMemoryTokenBucket`][InMemoryTokenBucket] /
-//! [`tocket::RedisTokenBucket`][RedisTokenBucket] simple implementations.
+//! This library provides implementation of token bucket algorithm.
 //!
-//! <br>
-//!
-//! # Usage example
+//! ## Usage example
 //!
 //! ```no_run
-//! use tocket::{RateLimiter, InMemoryTokenBucket};
+//! use tocket::{TokenBucket, InMemoryStorage};
 //! use std::sync::Arc;
 //! use std::time::Duration;
 //!
-//! # fn main() {
-//!     let rl = InMemoryTokenBucket::new(100);
-//!     let rl = Arc::new(rl);
+//! fn main() {
+//!     let tb = TokenBucket::new(InMemoryStorage::new(100));
+//!     let tb = Arc::new(tb);
 //!     
-//!     let mut handles = Vec::with_capacity(8);
 //!     for _ in 0..8 {
-//!         let h = std::thread::spawn({
-//!             let rl = Arc::clone(&rl);
+//!         std::thread::spawn({
+//!             let tb = Arc::clone(&tb);
 //!             move || {
 //!                 loop {
-//!                     match rl.try_acquire_one() {
+//!                     match tb.try_acquire_one() {
 //!                         Ok(_) => {
 //!                             println!("token acquired, limit not exceeded");
 //!                         }
@@ -37,38 +31,99 @@
 //!                 }
 //!             }
 //!         });
-//!         
-//!         handles.push(h);
 //!     }
-//! # }
+//! }
 //! ```
 
-pub mod error;
 pub mod in_memory;
 #[cfg(feature = "redis-impl")]
 pub mod in_redis;
 
-pub use error::Error;
-pub use in_memory::InMemoryTokenBucket;
+pub use in_memory::*;
 #[cfg(feature = "redis-impl")]
-pub use in_redis::RedisTokenBucket;
+pub use in_redis::*;
 
-/// Trait that provides functionality for acquiring tokens from token bucket.
-/// Your type should implement the only `RateLimiter::try_acquire()` function.
-pub trait RateLimiter {
-    /// Trying acquire tokens from token bucket.
-    ///
-    /// # Errors
-    ///
-    /// Will return `Err` if token limit exceeded.
-    fn try_acquire(&self, permits: u32) -> Result<(), Error>;
+pub trait Storage {
+    type Error: From<RateLimitExceededError>;
 
-    /// Trying acquire 1 token from token bucket, synonym for `try_acquire(1)`
-    ///
-    /// # Errors
-    ///
-    /// Will return `Err` if token limit exceeded.
-    fn try_acquire_one(&self) -> Result<(), Error> {
+    fn try_acquire(&self, alg: TokenBucketAlgorithm, permits: u32) -> Result<(), Self::Error>;
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct State {
+    pub cap: u32,
+    pub available_tokens: u32,
+    pub last_refill: time::OffsetDateTime,
+    pub refill_tick: time::Duration,
+}
+
+/// Rate limiter that implements token bucket algorithm.
+pub struct TokenBucket<S> {
+    storage: S,
+}
+
+impl<S> TokenBucket<S>
+where
+    S: Storage,
+{
+    pub fn new(storage: S) -> Self {
+        Self { storage }
+    }
+
+    pub fn try_acquire(&self, permits: u32) -> Result<(), S::Error> {
+        self.storage.try_acquire(TokenBucketAlgorithm, permits)
+    }
+
+    pub fn try_acquire_one(&self) -> Result<(), S::Error> {
         self.try_acquire(1)
     }
 }
+
+#[derive(Debug)]
+pub struct TokenBucketAlgorithm;
+
+impl TokenBucketAlgorithm {
+    pub fn try_acquire(
+        &self,
+        state: &mut State,
+        permits: u32,
+    ) -> Result<(), RateLimitExceededError> {
+        self.refill_state(state);
+        if state.available_tokens >= permits {
+            state.available_tokens -= permits;
+            Ok(())
+        } else {
+            Err(RateLimitExceededError(()))
+        }
+    }
+
+    fn refill_state(&self, state: &mut State) {
+        let now = time::OffsetDateTime::now_utc();
+        let since_last_refill = now - state.last_refill;
+
+        if since_last_refill <= state.refill_tick {
+            return;
+        }
+
+        let tokens_since_last_refill = {
+            let mut tokens_count = 0u32;
+            let mut k = since_last_refill;
+            loop {
+                k -= state.refill_tick;
+                if k <= time::Duration::ZERO {
+                    break;
+                }
+                tokens_count += 1;
+            }
+            tokens_count
+        };
+
+        state.available_tokens =
+            u32::min(state.available_tokens + tokens_since_last_refill, state.cap);
+        state.last_refill += state.refill_tick * tokens_since_last_refill;
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("rate limit exceeded")]
+pub struct RateLimitExceededError(());

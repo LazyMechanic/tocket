@@ -17,17 +17,15 @@ keywords = ["token", "bucket", "rate", "limit"]
 parking_lot = "0.12"
 redis = "0.21"
 thiserror = "1.0"
+time = "0.3"
 
 [dev-dependencies]
 criterion = "0.3.5"
 crossbeam = "0.8.1"
 
 [features]
-default = ["redis-impl"]
+default = []
 redis-impl = []
-
-# Inner feature for testing
-dev-redis-impl = []
 
 [[bench]]
 name = "bench_main"
