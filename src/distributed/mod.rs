@@ -1,74 +1,100 @@
-use crate::in_memory::InMemoryTokenBucketInner;
-use crate::Error;
+pub mod error;
+pub mod whitelist;
 
+mod codec;
+mod message;
+mod processing;
+
+use crate::distributed::codec::Codec;
+use crate::distributed::error::DistributedStorageError;
+use crate::distributed::message::Message;
+use crate::{InMemoryStorage, Storage, TokenBucketAlgorithm};
+
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::net::{ToSocketAddrs, UdpSocket};
-use tokio_util::sync::CancellationToken;
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
+use tokio_util::udp::UdpFramed;
 
-pub struct DistributedTokenBucket {
-    state: SharedState,
-    cancel_tok: CancellationToken,
+type AcquireTx = mpsc::UnboundedSender<u32>;
+type AcquireRx = mpsc::UnboundedReceiver<u32>;
+
+pub struct DistributedStorage {
+    tx: AcquireTx,
+    storage: Arc<InMemoryStorage>,
+    listen_addr: SocketAddr,
 }
 
-type SharedState = Arc<parking_lot::Mutex<InMemoryTokenBucketInner>>;
-
-impl DistributedTokenBucket {
-    pub async fn serve<L, E, A>(
+impl DistributedStorage {
+    pub async fn serve<A, S>(
         rps_limit: u32,
-        listen: L,
-        endpoints: E,
-    ) -> Result<DistributedTokenBucket, Error>
+        listen_addr: A,
+        strategy: S,
+    ) -> Result<Self, DistributedStorageError>
     where
-        L: ToSocketAddrs,
-        E: IntoIterator<Item = A> + Send + 'static,
-        A: ToSocketAddrs + 'static,
+        A: ToSocketAddrs,
+        S: Strategy + Send + 'static,
     {
-        let socket = UdpSocket::bind(listen)
-            .await
-            .map_err(|err| Error::Other(Box::new(err)))?;
+        let listen_addr = listen_addr.to_socket_addrs()?.collect::<Vec<_>>();
+        let socket = UdpSocket::bind(listen_addr.as_slice()).await?;
+        let listen_addr = socket.local_addr()?;
 
-        let cancel_tok = CancellationToken::new();
-
-        let state = Arc::new(parking_lot::Mutex::new(InMemoryTokenBucketInner {
-            cap: rps_limit,
-            available_tokens: rps_limit,
-            last_refill: Instant::now(),
-            refill_tick: Duration::from_secs(1) / rps_limit,
-        }));
-
-        tokio::spawn(process(
+        let storage = Arc::new(InMemoryStorage::new(rps_limit));
+        let (tx, rx) = mpsc::unbounded_channel();
+        tokio::spawn(processing::process(
             socket,
-            cancel_tok.child_token(),
-            Arc::clone(&state),
-            endpoints,
+            strategy,
+            Arc::clone(&storage),
+            rx,
         ));
 
-        Ok(Self { state, cancel_tok })
+        Ok(Self {
+            tx,
+            storage,
+            listen_addr,
+        })
+    }
+
+    pub fn listen_addr(&self) -> SocketAddr {
+        self.listen_addr
     }
 }
 
-impl Drop for DistributedTokenBucket {
-    fn drop(&mut self) {
-        self.cancel_tok.cancel();
+impl Storage for DistributedStorage {
+    type Error = DistributedStorageError;
+
+    fn try_acquire(&self, alg: TokenBucketAlgorithm, permits: u32) -> Result<(), Self::Error> {
+        self.storage.try_acquire(alg, permits)?;
+        self.tx
+            .send(permits)
+            .expect("sending permits to background task failed, this is a bug");
+        Ok(())
     }
 }
 
-async fn process<E, A>(
-    socket: UdpSocket,
-    cancel_tok: CancellationToken,
-    state: SharedState,
-    endpoints: E,
-) where
-    E: IntoIterator<Item = A>,
-    A: ToSocketAddrs,
-{
+#[async_trait::async_trait]
+pub trait Strategy: private::Sealed {
+    const KIND: &'static str;
+
+    async fn on_acquire(
+        &mut self,
+        permits: u32,
+        framed: &mut UdpFramed<Codec>,
+    ) -> Result<(), DistributedStorageError>;
+
+    async fn on_msg_recv(
+        &mut self,
+        msg: Message,
+        source: SocketAddr,
+        storage: &InMemoryStorage,
+        framed: &mut UdpFramed<Codec>,
+    ) -> Result<(), DistributedStorageError>;
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-struct Message {
-    init_timestamp: i64,
-    seqno: u64,
-    available_tokens: u32,
-    checksum: u32,
+mod private {
+    use super::*;
+
+    pub trait Sealed {}
+
+    impl Sealed for whitelist::WhitelistStrategy {}
 }

@@ -35,10 +35,12 @@
 //! }
 //! ```
 
+pub mod distributed;
 pub mod in_memory;
 #[cfg(feature = "redis-impl")]
 pub mod in_redis;
 
+pub use distributed::*;
 pub use in_memory::*;
 #[cfg(feature = "redis-impl")]
 pub use in_redis::*;
@@ -71,16 +73,30 @@ where
     }
 
     pub fn try_acquire(&self, permits: u32) -> Result<(), S::Error> {
-        self.storage.try_acquire(TokenBucketAlgorithm, permits)
+        self.storage
+            .try_acquire(TokenBucketAlgorithm { mode: Mode::N }, permits)
     }
 
     pub fn try_acquire_one(&self) -> Result<(), S::Error> {
         self.try_acquire(1)
     }
+
+    pub fn try_acquire_n_or_all(&self, permits: u32) -> Result<(), S::Error> {
+        self.storage
+            .try_acquire(TokenBucketAlgorithm { mode: Mode::All }, permits)
+    }
 }
 
 #[derive(Debug)]
-pub struct TokenBucketAlgorithm;
+pub struct TokenBucketAlgorithm {
+    mode: Mode,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum Mode {
+    N,
+    All,
+}
 
 impl TokenBucketAlgorithm {
     pub fn try_acquire(
@@ -89,11 +105,20 @@ impl TokenBucketAlgorithm {
         permits: u32,
     ) -> Result<(), RateLimitExceededError> {
         self.refill_state(state);
-        if state.available_tokens >= permits {
-            state.available_tokens -= permits;
-            Ok(())
-        } else {
-            Err(RateLimitExceededError(()))
+
+        match self.mode {
+            Mode::N => {
+                if state.available_tokens >= permits {
+                    state.available_tokens -= permits;
+                    Ok(())
+                } else {
+                    Err(RateLimitExceededError(()))
+                }
+            }
+            Mode::All => {
+                state.available_tokens -= u32::min(permits, state.available_tokens);
+                Ok(())
+            }
         }
     }
 
