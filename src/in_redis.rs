@@ -98,13 +98,13 @@ impl Storage for RedisStorage {
                     Some(last_refill_ts) => {
                         let last_refill_ts_arr: [u8; I128_SIZE] = match last_refill_ts.try_into() {
                             Ok(v) => v,
-                            Err(_) => {
-                                return Ok(Some(Err(RedisStorageError::Other {
-                                    msg: format!(
-                                        "converting value '{}' to i128 failed",
-                                        self.last_refill_key
-                                    ),
-                                })))
+                            Err(v) => {
+                                return Ok(Some(Err(
+                                    RedisStorageError::ConvertingBytesToI128Error {
+                                        key: self.last_refill_key.clone(),
+                                        value: v,
+                                    },
+                                )))
                             }
                         };
 
@@ -149,8 +149,8 @@ pub enum RedisStorageError {
     TimeComponentRangeError(#[from] time::error::ComponentRange),
     #[error(transparent)]
     RateLimitExceededError(#[from] RateLimitExceededError),
-    #[error("{msg}")]
-    Other { msg: String },
+    #[error("converting '{key}' ({value:?}) to i128 failed")]
+    ConvertingBytesToI128Error { key: String, value: Vec<u8> },
 }
 
 #[cfg(test)]
@@ -159,16 +159,20 @@ mod tests {
     use crate::TokenBucket;
 
     use std::time::Duration;
+    use uuid::Uuid;
 
     #[test]
     fn try_acquire() {
-        let tb = TokenBucket::new(
-            RedisStorage::new(
-                2,
-                std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned()),
-            )
-            .unwrap(),
-        );
+        let storage = RedisStorage::builder(
+            2,
+            std::env::var("REDIS_HOST").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned()),
+        )
+        .with_last_refill_key(format!("last_refill_{}", Uuid::new_v4()))
+        .with_available_tokens_key(format!("available_tokens{}", Uuid::new_v4()))
+        .build()
+        .unwrap();
+
+        let tb = TokenBucket::new(storage);
 
         assert!(tb.try_acquire(2).is_ok());
         assert!(tb.try_acquire_one().is_err());
