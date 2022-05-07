@@ -15,6 +15,7 @@ pub(super) async fn process<S1>(
 ) where
     S1: Strategy,
 {
+    tracing::debug!("start background task");
     let mut framed = UdpFramed::new(socket, Codec::default());
 
     loop {
@@ -28,10 +29,7 @@ pub(super) async fn process<S1>(
                         }
                     }
                     // Channel closed
-                    None => {
-                        tracing::debug!("stop background task");
-                        break;
-                    },
+                    None => break,
                 }
             }
             res = framed.next() => {
@@ -50,4 +48,6 @@ pub(super) async fn process<S1>(
             }
         }
     }
+
+    tracing::debug!("stop background task");
 }

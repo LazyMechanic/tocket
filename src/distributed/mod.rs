@@ -5,8 +5,10 @@ mod codec;
 mod message;
 mod processing;
 
+pub use error::DistributedStorageError;
+pub use whitelist::WhitelistStrategy;
+
 use crate::distributed::codec::Codec;
-use crate::distributed::error::DistributedStorageError;
 use crate::distributed::message::Message;
 use crate::{InMemoryStorage, Storage, TokenBucketAlgorithm};
 
