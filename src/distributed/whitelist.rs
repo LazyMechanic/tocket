@@ -48,7 +48,8 @@ impl Strategy for WhitelistStrategy {
         }));
 
         for peer in &self.peers {
-            framed.send((msg.clone(), *peer)).await?
+            framed.send((msg.clone(), *peer)).await?;
+            tracing::debug!("sent message to peer {}: {:?}", peer, msg);
         }
 
         Ok(())
@@ -65,6 +66,8 @@ impl Strategy for WhitelistStrategy {
             return Err(DistributedStorageError::PeerNotWhitelisted { peer: source });
         }
 
+        // TODO: remove allowing when add another one strategy
+        #[allow(unreachable_patterns)]
         match msg.content {
             Content::Whitelist(content) => {
                 let now = time::OffsetDateTime::now_utc();
@@ -90,13 +93,25 @@ mod tests {
     use crate::{DistributedStorage, TokenBucket};
     use std::time::Duration;
 
+    async fn make_token_bucket<I, S>(port: u16, peers: I) -> TokenBucket<DistributedStorage>
+    where
+        I: IntoIterator<Item = S>,
+        S: ToSocketAddrs,
+    {
+        let storage = DistributedStorage::serve(
+            2,
+            format!("0.0.0.0:{}", port),
+            WhitelistStrategy::new(peers).unwrap(),
+        )
+        .await
+        .unwrap();
+
+        TokenBucket::new(storage)
+    }
+
     #[tokio::test]
-    async fn t1() {
-        let strategy = WhitelistStrategy::new(Vec::<String>::new()).unwrap();
-        let storage = DistributedStorage::serve(2, "0.0.0.0:0", strategy)
-            .await
-            .unwrap();
-        let tb = TokenBucket::new(storage);
+    async fn try_acquire_single() {
+        let tb = make_token_bucket(0, Vec::<String>::new()).await;
 
         assert!(tb.try_acquire(2).is_ok());
         assert!(tb.try_acquire_one().is_err());
@@ -108,5 +123,32 @@ mod tests {
         std::thread::sleep(Duration::from_millis(1500));
         assert!(tb.try_acquire(2).is_ok());
         assert!(tb.try_acquire_one().is_err());
+    }
+
+    #[tokio::test]
+    async fn try_acquire_multiple() {
+        let tb1 = make_token_bucket(49001, vec!["127.0.0.1:49002", "127.0.0.1:49003"]).await;
+        let tb2 = make_token_bucket(49002, vec!["127.0.0.1:49001", "127.0.0.1:49003"]).await;
+        let tb3 = make_token_bucket(49003, vec!["127.0.0.1:49001", "127.0.0.1:49002"]).await;
+
+        assert!(tb1.try_acquire(2).is_ok());
+        assert!(tb1.try_acquire_one().is_err());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(tb2.try_acquire_one().is_err());
+        assert!(tb3.try_acquire_one().is_err());
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert!(tb1.try_acquire(2).is_ok());
+        assert!(tb1.try_acquire_one().is_err());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(tb2.try_acquire_one().is_err());
+        assert!(tb3.try_acquire_one().is_err());
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert!(tb1.try_acquire(2).is_ok());
+        assert!(tb1.try_acquire_one().is_err());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(tb2.try_acquire_one().is_err());
+        assert!(tb3.try_acquire_one().is_err());
     }
 }

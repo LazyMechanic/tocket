@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio_util::udp::UdpFramed;
+use tracing::Instrument;
 
 type AcquireTx = mpsc::UnboundedSender<u32>;
 type AcquireRx = mpsc::UnboundedReceiver<u32>;
@@ -43,12 +44,10 @@ impl DistributedStorage {
 
         let storage = Arc::new(InMemoryStorage::new(rps_limit));
         let (tx, rx) = mpsc::unbounded_channel();
-        tokio::spawn(processing::process(
-            socket,
-            strategy,
-            Arc::clone(&storage),
-            rx,
-        ));
+        tokio::spawn(
+            processing::process(socket, strategy, Arc::clone(&storage), rx)
+                .instrument(tracing::Span::current()),
+        );
 
         Ok(Self {
             tx,

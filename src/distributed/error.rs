@@ -8,8 +8,6 @@ pub enum DistributedStorageError {
     RateLimitExceededError(#[from] RateLimitExceededError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[error(transparent)]
-    Bincode(#[from] bincode::Error),
 
     #[error("checksum does not match: actual = {act:#x} expected = {exp:#x}")]
     ChecksumMismatch { act: u32, exp: u32 },
