@@ -37,8 +37,6 @@ impl WhitelistStrategy {
 
 #[async_trait::async_trait]
 impl Strategy for WhitelistStrategy {
-    const KIND: &'static str = "whitelist";
-
     async fn on_acquire(
         &mut self,
         permits: u32,
@@ -76,16 +74,13 @@ impl Strategy for WhitelistStrategy {
                 }
 
                 storage.try_acquire(TokenBucketAlgorithm { mode: Mode::All }, content.permits)?;
+                Ok(())
             }
-            x => {
-                return Err(DistributedStorageError::MessageContentMismatch {
-                    exp: ContentKind::Whitelist,
-                    act: x.kind(),
-                })
-            }
+            x => Err(DistributedStorageError::MessageContentMismatch {
+                exp: ContentKind::Whitelist,
+                act: x.kind(),
+            }),
         }
-
-        Ok(())
     }
 }
 

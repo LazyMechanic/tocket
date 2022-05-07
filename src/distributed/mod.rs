@@ -74,8 +74,6 @@ impl Storage for DistributedStorage {
 
 #[async_trait::async_trait]
 pub trait Strategy: private::Sealed {
-    const KIND: &'static str;
-
     async fn on_acquire(
         &mut self,
         permits: u32,
