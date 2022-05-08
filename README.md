@@ -1,5 +1,15 @@
 # Tocket
-This library provides implementation of token bucket algorithm.
+
+[<img alt="crates.io" src="https://img.shields.io/crates/v/tocket?style=flat-square">](https://crates.io/crates/tocket)
+[<img alt="docs.rs" src="https://img.shields.io/docsrs/tocket?style=flat-square">](https://docs.rs/tocket)
+[<img alt="build" src="https://img.shields.io/github/workflow/status/LazyMechanic/tocket/Rust?style=flat-square">](https://github.com/LazyMechanic/tocket/actions)
+
+This library provides implementation of token bucket algorithm and some storage implementations.
+
+```toml
+[dependencies]
+tocket = "0.2"
+```
 
 ### Example
 ```rust
@@ -11,27 +21,29 @@ fn main() {
     let tb = TokenBucket::new(InMemoryStorage::new(100));
     let tb = Arc::new(tb);
 
-    for _ in 0..8 {
+    for i in 0..4 {
         std::thread::spawn({
             let tb = Arc::clone(&tb);
             move || {
                 loop {
+                    std::thread::sleep(Duration::from_secs(i));
+                    
                     match tb.try_acquire_one() {
-                        Ok(_) => {
-                            println!("token acquired, limit not exceeded");
-                        }
-                        Err(err) => {
-                            eprintln!("token acquiring failed: {}", err);
-                        }
+                        Ok(_) => println!("token acquired, limit not exceeded"),
+                        Err(err) => eprintln!("token acquiring failed: {}", err),
                     }
-
-                    std::thread::sleep(Duration::from_millis(200));
                 }
             }
         });
     }
+    
+    loop {}
 }
 ```
+
+## Features
+- `redis-impl` - redis storage implementation
+- `distributed-impl` - distributed storage implementation
 
 #### License
 

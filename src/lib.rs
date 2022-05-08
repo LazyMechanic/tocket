@@ -4,12 +4,16 @@
 //!
 //! This library provides implementation of token bucket algorithm and some storage implementations.
 //!
-//! Available storages:
+//! ## Available storages:
 //! - [`InMemoryStorage`]
 //! - [`RedisStorage`]
 //! - [`DistributedStorage`]
 //!
 //! You can implement your own [storage] (e.g. Postgres).
+//!
+//! ## Features
+//! - `redis-impl` - redis storage implementation
+//! - `distributed-impl` - distributed storage implementation
 //!
 //! [`InMemoryStorage`]: crate::in_memory::InMemoryStorage
 //! [`RedisStorage`]: crate::in_redis::RedisStorage

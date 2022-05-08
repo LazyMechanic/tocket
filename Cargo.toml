@@ -1,10 +1,10 @@
 [package]
 name = "tocket"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["LazyMechanic <asharnrus@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "A trait and simple implemetation of 'Tocken Bucket' algorithm"
+description = "A implemetation of 'Token Bucket' algorithm"
 repository = "https://github.com/LazyMechanic/tocket"
 documentation = "https://docs.rs/tocket"
 readme = "README.md"
