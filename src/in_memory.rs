@@ -1,10 +1,27 @@
 use crate::{RateLimitExceededError, State, Storage, TokenBucketAlgorithm};
 
+/// A storage that stores state in memory.
+///
+/// Useful for single application instance or for tests.
+///
+/// # Example
+/// ```
+/// # fn main() {
+/// use tocket::{TokenBucket, InMemoryStorage};
+///
+/// fn main() {
+///     let tb = TokenBucket::new(InMemoryStorage::new(2));
+///     assert!(tb.try_acquire(2).is_ok());
+///     assert!(tb.try_acquire_one().is_err());
+/// }
+/// # }
+/// ```
 pub struct InMemoryStorage {
     state: parking_lot::Mutex<State>,
 }
 
 impl InMemoryStorage {
+    /// Creates a storage.
     pub fn new(rps_limit: u32) -> Self {
         Self {
             state: parking_lot::Mutex::new(State {

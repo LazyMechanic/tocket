@@ -22,6 +22,20 @@ use tracing::Instrument;
 type AcquireTx = mpsc::UnboundedSender<u32>;
 type AcquireRx = mpsc::UnboundedReceiver<u32>;
 
+/// A distributed storage that under the hood stores the state in the local `InMemoryStorage`
+/// and sends messages to the rest of the distributed storages via UDP messages on each tokens acquiring,
+/// according to the strategy used.
+///
+/// Useful when you have multiple application instances with shared state
+/// but don't want to run additional storage (e.g. Redis).
+///
+/// # Available strategies:
+/// - [`WhitelistStrategy`]
+///
+/// # Example
+/// See usage examples in strategies above.
+///
+/// [`WhitelistStrategy`]: crate::distributed::whitelist::WhitelistStrategy
 pub struct DistributedStorage {
     tx: AcquireTx,
     storage: Arc<InMemoryStorage>,
@@ -29,6 +43,12 @@ pub struct DistributedStorage {
 }
 
 impl DistributedStorage {
+    /// Creates a distributed storage with the given strategy
+    /// and starts a background task that will listen a UDP socket.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if failed to resolve listen address.
     pub async fn serve<A, S>(
         rps_limit: u32,
         listen_addr: A,
@@ -56,6 +76,7 @@ impl DistributedStorage {
         })
     }
 
+    /// Get listen address.
     pub fn listen_addr(&self) -> SocketAddr {
         self.listen_addr
     }
@@ -95,5 +116,5 @@ mod private {
 
     pub trait Sealed {}
 
-    impl Sealed for whitelist::WhitelistStrategy {}
+    impl Sealed for WhitelistStrategy {}
 }

@@ -5,7 +5,23 @@ pub const AVAILABLE_TOKENS_KEY: &str = "tocket::available_tokens";
 /// Default key of last refill in redis
 pub const LAST_REFILL_KEY: &str = "tocket::last_refill";
 
-/// Storage that contains state in redis.
+/// A storage that stores state in Redis.
+///
+/// Useful when you have multiple application instances with shared state
+/// and Redis already running.
+///
+/// # Example
+/// ```
+/// # fn main() {
+/// use tocket::{TokenBucket, InMemoryStorage};
+///
+/// fn main() {
+///     let tb = TokenBucket::new(InMemoryStorage::new(2));
+///     assert!(tb.try_acquire(2).is_ok());
+///     assert!(tb.try_acquire_one().is_err());
+/// }
+/// # }
+/// ```
 pub struct RedisStorage {
     conn: parking_lot::Mutex<redis::Connection>,
     cap: u32,
@@ -15,7 +31,7 @@ pub struct RedisStorage {
 }
 
 impl RedisStorage {
-    /// Creates new storage with max rate limit of `rps_limit`.
+    /// Creates a storage.
     ///
     /// # Errors
     ///
@@ -36,6 +52,7 @@ impl RedisStorage {
         })
     }
 
+    /// Creates a builder of storage. Needs for customizing of redis keys
     pub fn builder<I>(rps_limit: u32, conn_info: I) -> RedisStorageBuilder
     where
         I: AsRef<str>,

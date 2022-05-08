@@ -1,56 +1,52 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! # Tocket
 //!
-//! This library provides implementation of token bucket algorithm.
+//! This library provides implementation of token bucket algorithm and some storage implementations.
 //!
-//! ## Usage example
+//! Available storages:
+//! - [`InMemoryStorage`]
+//! - [`RedisStorage`]
+//! - [`DistributedStorage`]
 //!
-//! ```no_run
-//! use tocket::{TokenBucket, InMemoryStorage};
-//! use std::sync::Arc;
-//! use std::time::Duration;
+//! You can implement your own [storage] (e.g. Postgres).
 //!
-//! fn main() {
-//!     let tb = TokenBucket::new(InMemoryStorage::new(100));
-//!     let tb = Arc::new(tb);
-//!     
-//!     for _ in 0..8 {
-//!         std::thread::spawn({
-//!             let tb = Arc::clone(&tb);
-//!             move || {
-//!                 loop {
-//!                     match tb.try_acquire_one() {
-//!                         Ok(_) => {
-//!                             println!("token acquired, limit not exceeded");
-//!                         }
-//!                         Err(err) => {
-//!                             eprintln!("token acquiring failed: {}", err);
-//!                         }
-//!                     }
-//!                     
-//!                     std::thread::sleep(Duration::from_millis(200));
-//!                 }
-//!             }
-//!         });
-//!     }
-//! }
-//! ```
+//! [`InMemoryStorage`]: crate::in_memory::InMemoryStorage
+//! [`RedisStorage`]: crate::in_redis::RedisStorage
+//! [`DistributedStorage`]: crate::distributed::DistributedStorage
+//! [storage]: crate::Storage
 
-pub mod distributed;
 pub mod in_memory;
+
+#[cfg(feature = "distributed-impl")]
+#[cfg_attr(docsrs, doc(cfg(feature = "distributed-impl")))]
+pub mod distributed;
+
 #[cfg(feature = "redis-impl")]
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-impl")))]
 pub mod in_redis;
 
-pub use distributed::*;
 pub use in_memory::*;
+
+#[cfg(feature = "distributed-impl")]
+#[cfg_attr(docsrs, doc(cfg(feature = "distributed-impl")))]
+pub use distributed::*;
+
 #[cfg(feature = "redis-impl")]
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-impl")))]
 pub use in_redis::*;
 
+/// Trait that provides function for tokens acquiring.
+///
+/// Object that implements this trait should load state, execute provided algorithm
+/// and save updated state.
 pub trait Storage {
     type Error: From<RateLimitExceededError>;
 
     fn try_acquire(&self, alg: TokenBucketAlgorithm, permits: u32) -> Result<(), Self::Error>;
 }
 
+/// State of token bucket.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct State {
     pub cap: u32,
@@ -68,25 +64,42 @@ impl<S> TokenBucket<S>
 where
     S: Storage,
 {
+    /// Creates new token bucket rate limiter with provided storage.
     pub fn new(storage: S) -> Self {
         Self { storage }
     }
 
+    /// Tries to acquire N tokens.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are not enough tokens or if the storage could not save/load state.
     pub fn try_acquire(&self, permits: u32) -> Result<(), S::Error> {
         self.storage
             .try_acquire(TokenBucketAlgorithm { mode: Mode::N }, permits)
     }
 
+    /// Tries to acquire 1 token.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are not enough tokens or if the storage could not save/load state.
     pub fn try_acquire_one(&self) -> Result<(), S::Error> {
         self.try_acquire(1)
     }
 
+    /// Tries to acquire N or all available tokens if `available < N`.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if the storage could not save/load state.
     pub fn try_acquire_n_or_all(&self, permits: u32) -> Result<(), S::Error> {
         self.storage
             .try_acquire(TokenBucketAlgorithm { mode: Mode::All }, permits)
     }
 }
 
+/// Struct that implements token bucket algorithm.
 #[derive(Debug)]
 pub struct TokenBucketAlgorithm {
     mode: Mode,

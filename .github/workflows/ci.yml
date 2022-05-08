@@ -31,13 +31,27 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Build
+    - name: Build (no features)
+      run: cargo check
+    - name: Build (feature=redis-impl)
       run: cargo check --features=redis-impl
+    - name: Build (feature=distributed-impl)
+      run: cargo check --features=distributed-impl
+    - name: Build (all features)
+      run: cargo check --features=redis-impl,distributed-impl
 
-    - name: Test
+    - name: Clippy
+      run: cargo clippy --tests --features=redis-impl,distributed-impl -- -Dwarnings
+
+    - name: Test (no features)
+      run: cargo test
+    - name: Test (feature=redis-impl)
       run: cargo test --features=redis-impl
       env:
         REDIS_HOST: redis://localhost:6379
-
-    - name: Clippy
-      run: cargo clippy --tests --features=redis-impl -- -Dwarnings
+    - name: Test (feature=distributed-impl)
+      run: cargo test --features=distributed-impl
+    - name: Test (all features)
+      run: cargo test --features=redis-impl,distributed-impl
+      env:
+        REDIS_HOST: redis://localhost:6379

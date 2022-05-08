@@ -10,11 +10,57 @@ use tokio_util::udp::UdpFramed;
 
 const MAX_TS_DIFF: time::Duration = time::Duration::seconds(5);
 
+/// Strategy that receives messages only from whitelisted peers and sends messages only to them.
+///
+/// # Example
+/// ```
+/// use tocket::{TokenBucket, DistributedStorage, WhitelistStrategy};
+/// use std::net::ToSocketAddrs;
+/// use std::time::Duration;
+///
+/// async fn make_token_bucket<I, S>(port: u16, peers: I) -> TokenBucket<DistributedStorage>
+/// where
+///     I: IntoIterator<Item = S>,
+///     S: ToSocketAddrs,
+/// {
+///     let storage = DistributedStorage::serve(
+///         2,
+///         format!("0.0.0.0:{}", port),
+///         WhitelistStrategy::new(peers).unwrap(),
+///     )
+///     .await
+///     .unwrap();
+///
+///     TokenBucket::new(storage)
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let tb1 = make_token_bucket(49001, vec!["127.0.0.1:49002", "127.0.0.1:49003"]).await;
+///     let tb2 = make_token_bucket(49002, vec!["127.0.0.1:49001", "127.0.0.1:49003"]).await;
+///     let tb3 = make_token_bucket(49003, vec!["127.0.0.1:49001", "127.0.0.1:49002"]).await;
+///
+///     assert!(tb1.try_acquire(2).is_ok());
+///     assert!(tb1.try_acquire_one().is_err());
+///
+///     // Waiting for some time until the message reaches the rest token buckets
+///     tokio::time::sleep(Duration::from_millis(100)).await;
+///
+///     assert!(tb2.try_acquire_one().is_err());
+///     assert!(tb3.try_acquire_one().is_err());
+///
+/// }
+/// ```
 pub struct WhitelistStrategy {
     peers: HashSet<SocketAddr>,
 }
 
 impl WhitelistStrategy {
+    /// Creates a strategy with provided whitelist of peers.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if failed to resolve any of address.
     pub fn new<I, S>(peers: I) -> Result<Self, DistributedStorageError>
     where
         I: IntoIterator<Item = S>,
@@ -26,7 +72,7 @@ impl WhitelistStrategy {
             .map(|v| match v {
                 Ok(mut addrs) => addrs
                     .next()
-                    .ok_or_else(|| DistributedStorageError::PeerAddrNotResolved),
+                    .ok_or(DistributedStorageError::PeerAddrNotResolved),
                 Err(err) => Err(err),
             })
             .collect::<Result<HashSet<_>, _>>()?;
