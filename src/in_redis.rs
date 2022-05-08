@@ -13,10 +13,12 @@ pub const LAST_REFILL_KEY: &str = "tocket::last_refill";
 /// # Example
 /// ```
 /// # fn main() {
-/// use tocket::{TokenBucket, InMemoryStorage};
+/// use tocket::{TokenBucket, RedisStorage};
 ///
 /// fn main() {
-///     let tb = TokenBucket::new(InMemoryStorage::new(2));
+///      let storage = RedisStorage::new(2, "redis://127.0.0.1:6379").unwrap();
+///
+///     let tb = TokenBucket::new(storage);
 ///     assert!(tb.try_acquire(2).is_ok());
 ///     assert!(tb.try_acquire_one().is_err());
 /// }
